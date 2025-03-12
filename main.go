@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 )
 
-func search(fileName string, dirName string, returnEarly bool) (fileFound, dirFound bool, err error) {
-	err = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+func search(rootDir, fileName, dirName string, returnEarly bool) (fileFound, dirFound bool, err error) {
+	err = filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -40,6 +40,7 @@ func search(fileName string, dirName string, returnEarly bool) (fileFound, dirFo
 func main() {
 	fileName := flag.String("file", "", "name of the file to search")
 	dirName := flag.String("dir", "", "specify if it's a directory")
+	rootDir := flag.String("root", ".", "Root directory to start the search (default: current directory)")
 	returnEarly := flag.Bool("r", false, "Return early after finding the first match")
 	flag.Parse()
 
@@ -48,7 +49,12 @@ func main() {
 		return
 	}
 
-	fileFound, dirFound, err := search(*fileName, *dirName, *returnEarly)
+	fileFound, dirFound, err := search(*rootDir, *fileName, *dirName, *returnEarly)
+
+	// Validate if the root directory exists
+	if _, err := os.Stat(*rootDir); os.IsNotExist(err) {
+		log.Fatalf("Error: Specified root directory '%s' does not exist.\n", *rootDir)
+	}
 
 	if err != nil {
 		log.Fatal("Error during search: ", err)
