@@ -8,37 +8,56 @@ import (
 	"path/filepath"
 )
 
-func lookForFile(file_name string) (bool, error) {
-	found := false
-
-	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+func search(fileName string, dirName string, returnEarly bool) (fileFound, dirFound bool, err error) {
+	err = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if d.Name() == file_name {
-			found = true
+		// Searches for directories
+		if dirName != "" && d.IsDir() && d.Name() == dirName {
+			fmt.Println("Directory found at path:", path)
+			dirFound = true
+		}
+
+		// Searches for files
+		if fileName != "" && !d.IsDir() && d.Name() == fileName {
+			fmt.Println("File found at path:", path)
+			fileFound = true
+		}
+
+		// If both are found and -r flag is enabled, stop searching
+		if returnEarly && fileFound && dirFound {
+			return filepath.SkipAll // Stops further search
 		}
 
 		return nil
 	})
 
-	return found, err
+	return fileFound, dirFound, err
 }
 
 func main() {
-	file_name := flag.String("file", "", "name of the file to search")
+	fileName := flag.String("file", "", "name of the file to search")
+	dirName := flag.String("dir", "", "specify if it's a directory")
+	returnEarly := flag.Bool("r", false, "Return early after finding the first match")
 	flag.Parse()
 
-	found, err := lookForFile(*file_name)
-
-	if err != nil {
-		log.Fatal(err)
+	if *fileName == "" && *dirName == "" {
+		fmt.Println("Please provide a file or directory name using -file or -dir flag respectively")
+		return
 	}
 
-	if found {
-		fmt.Println("File was found")
-	} else {
-		fmt.Println("File was not found")
+	fileFound, dirFound, err := search(*fileName, *dirName, *returnEarly)
+
+	if err != nil {
+		log.Fatal("Error during search: ", err)
+	}
+
+	if *fileName != "" && !fileFound {
+		fmt.Println("File not found")
+	}
+	if *dirName != "" && !dirFound {
+		fmt.Println("Directory not found")
 	}
 }
