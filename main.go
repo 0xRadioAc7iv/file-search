@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 )
 
 func search(rootDir, fileName, dirName, regexPattern string, returnEarly bool) (fileFound, dirFound bool, err error) {
@@ -79,12 +80,13 @@ func main() {
 		return
 	}
 
-	fileFound, dirFound, err := search(*rootDir, *fileName, *dirName, *regexPattern, *returnEarly)
-
 	// Validate if the root directory exists
 	if _, err := os.Stat(*rootDir); os.IsNotExist(err) {
 		log.Fatalf("Error: Specified root directory '%s' does not exist.\n", *rootDir)
 	}
+
+	start := time.Now()
+	fileFound, dirFound, err := search(*rootDir, *fileName, *dirName, *regexPattern, *returnEarly)
 
 	if err != nil {
 		log.Fatal("Error during search: ", err)
@@ -96,4 +98,6 @@ func main() {
 	if *dirName != "" && !dirFound {
 		fmt.Println("Directory not found")
 	}
+
+	fmt.Printf("Search completed in %v\n", time.Since(start))
 }
