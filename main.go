@@ -25,7 +25,7 @@ type SearchStats struct {
 	DirsFound    int
 }
 
-func searchConcurrent(rootDir, fileName, dirName, regexPattern string, returnEarly bool, maxWorkers int) (fileFound, dirFound bool, stats SearchStats, err error) {
+func searchConcurrent(rootDir, fileName, dirName, regexPattern string, returnEarly bool, maxWorkers int, logFile *os.File) (fileFound, dirFound bool, stats SearchStats, err error) {
 	var re *regexp.Regexp
 	if regexPattern != "" {
 		re, err = regexp.Compile(regexPattern)
@@ -137,27 +137,42 @@ func searchConcurrent(rootDir, fileName, dirName, regexPattern string, returnEar
 		}
 	}
 
+	// Create a mutex for file logging to prevent interleaved writes
+	var logMutex sync.Mutex
+
 	// Start a goroutine to collect results
 	go func() {
 		for result := range resultChan {
 			mu.Lock()
+
+			var outputMsg string
 			switch result.Matched {
 			case "file":
-				fmt.Println("File found at path:", result.Path)
+				outputMsg = fmt.Sprintf("File found at path: %s", result.Path)
+				fmt.Println(outputMsg)
 				fileFound = true
 				stats.FilesFound++
 			case "dir":
-				fmt.Println("Directory found at path:", result.Path)
+				outputMsg = fmt.Sprintf("Directory found at path: %s", result.Path)
+				fmt.Println(outputMsg)
 				dirFound = true
 				stats.DirsFound++
 			case "regex":
-				fmt.Printf("Match found at path: %s\n", result.Path)
+				outputMsg = fmt.Sprintf("Match found at path: %s", result.Path)
+				fmt.Println(outputMsg)
 				stats.RegexMatches++
 				if result.IsDir {
 					dirFound = true
 				} else {
 					fileFound = true
 				}
+			}
+
+			// Write to log file if provided
+			if logFile != nil {
+				logMutex.Lock()
+				fmt.Fprintf(logFile, "%s\n", outputMsg)
+				logMutex.Unlock()
 			}
 
 			// If returnEarly flag is set and we found what we're looking for
@@ -199,6 +214,8 @@ func main() {
 	returnEarly := flag.Bool("r", false, "Return early after finding the first match")
 	regexPattern := flag.String("regex", "", "Regex pattern to match file/directory names")
 	workers := flag.Int("workers", 10, "Maximum number of concurrent workers")
+	enableLog := flag.Bool("log", false, "Log all matches to a text file")
+	logFilePath := flag.String("logfile", "search_results.log", "Path to log file (used with -log)")
 	flag.Parse()
 
 	if *fileName == "" && *dirName == "" && *regexPattern == "" {
@@ -211,9 +228,34 @@ func main() {
 		log.Fatalf("Error: Specified root directory '%s' does not exist.\n", *rootDir)
 	}
 
+	// Open log file if logging is enabled
+	var logFile *os.File
+	if *enableLog {
+		var err error
+		logFile, err = os.Create(*logFilePath)
+		if err != nil {
+			log.Fatalf("Error creating log file: %v", err)
+		}
+		defer logFile.Close()
+
+		// Write header to log file
+		timestamp := time.Now().Format("2024-03-05 15:04:05")
+		fmt.Fprintf(logFile, "Search results - %s\n", timestamp)
+		fmt.Fprintf(logFile, "Root directory: %s\n", *rootDir)
+		if *fileName != "" {
+			fmt.Fprintf(logFile, "File name: %s\n", *fileName)
+		}
+		if *dirName != "" {
+			fmt.Fprintf(logFile, "Directory name: %s\n", *dirName)
+		}
+		if *regexPattern != "" {
+			fmt.Fprintf(logFile, "Regex pattern: %s\n", *regexPattern)
+		}
+		fmt.Fprintf(logFile, "-------------------------------------------\n")
+	}
+
 	start := time.Now()
-	fileFound, dirFound, stats, err := searchConcurrent(*rootDir, *fileName, *dirName, *regexPattern, *returnEarly, *workers)
-	fmt.Printf("\nSearch completed in %v\n", time.Since(start))
+	fileFound, dirFound, stats, err := searchConcurrent(*rootDir, *fileName, *dirName, *regexPattern, *returnEarly, *workers, logFile)
 
 	if err != nil {
 		log.Fatal("Error during search: ", err)
@@ -231,9 +273,28 @@ func main() {
 		fmt.Printf("- Regex matches found: %d\n", stats.RegexMatches)
 	}
 	if *fileName != "" {
-		fmt.Printf("- Files found: %d\n", stats.FilesFound)
+		fmt.Printf("- Named files found: %d\n", stats.FilesFound)
 	}
 	if *dirName != "" {
-		fmt.Printf("- Directories found: %d\n", stats.DirsFound)
+		fmt.Printf("- Named directories found: %d\n", stats.DirsFound)
 	}
+
+	// Write statistics to log file if enabled
+	if *enableLog {
+		fmt.Fprintf(logFile, "\nSearch Statistics:\n")
+		if *regexPattern != "" {
+			fmt.Fprintf(logFile, "- Regex matches found: %d\n", stats.RegexMatches)
+		}
+		if *fileName != "" {
+			fmt.Fprintf(logFile, "- Named files found: %d\n", stats.FilesFound)
+		}
+		if *dirName != "" {
+			fmt.Fprintf(logFile, "- Named directories found: %d\n", stats.DirsFound)
+		}
+		fmt.Fprintf(logFile, "Search completed in %v\n", time.Since(start))
+
+		fmt.Printf("Results written to log file: %s\n", *logFilePath)
+	}
+
+	fmt.Printf("Search completed in %v\n", time.Since(start))
 }
