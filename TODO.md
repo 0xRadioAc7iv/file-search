@@ -1,2 +1,0 @@
-- [ ] Concurrency
-- [ ] README.md

@@ -28,6 +28,9 @@ Go File Search is a command-line utility that allows users to search for files a
 
 - Go 1.23 or higher
 
+### Download binaries
+[releases/tag/v0.1.0](https://github.com/0xRadioAc7iv/file-search/releases/tag/v0.1.0)
+
 ### Building from source
 
 ```bash
