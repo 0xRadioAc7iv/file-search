@@ -25,7 +25,7 @@ type SearchStats struct {
 	DirsFound    int
 }
 
-func searchConcurrent(rootDir, fileName, dirName, regexPattern string, returnEarly bool, maxWorkers int, logFile *os.File) (fileFound, dirFound bool, stats SearchStats, err error) {
+func searchConcurrent(rootDir, fileName, dirName, regexPattern string, returnEarly, suppresErrors bool, maxWorkers int, logFile *os.File) (fileFound, dirFound bool, stats SearchStats, err error) {
 	var re *regexp.Regexp
 	if regexPattern != "" {
 		re, err = regexp.Compile(regexPattern)
@@ -57,7 +57,7 @@ func searchConcurrent(rootDir, fileName, dirName, regexPattern string, returnEar
 
 		// Read directory entries
 		entries, err := os.ReadDir(path)
-		if err != nil {
+		if !suppresErrors && err != nil {
 			log.Printf("Error reading directory %s: %v", path, err)
 			return
 		}
@@ -216,6 +216,7 @@ func main() {
 	workers := flag.Int("workers", 10, "Maximum number of concurrent workers")
 	enableLog := flag.Bool("log", false, "Log all matches to a text file")
 	logFilePath := flag.String("logfile", "search_results.log", "Path to log file (used with -log)")
+	suppresErrors := flag.Bool("noerrors", false, "whether to log errors or not")
 	flag.Parse()
 
 	if *fileName == "" && *dirName == "" && *regexPattern == "" {
@@ -255,7 +256,7 @@ func main() {
 	}
 
 	start := time.Now()
-	fileFound, dirFound, stats, err := searchConcurrent(*rootDir, *fileName, *dirName, *regexPattern, *returnEarly, *workers, logFile)
+	fileFound, dirFound, stats, err := searchConcurrent(*rootDir, *fileName, *dirName, *regexPattern, *returnEarly, *suppresErrors, *workers, logFile)
 
 	if err != nil {
 		log.Fatal("Error during search: ", err)
